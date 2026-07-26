@@ -38,7 +38,7 @@ func main() {
 	}
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		printErr(err)
 		os.Exit(1)
 	}
 }
@@ -48,11 +48,12 @@ func printUsage() {
 
 Usage:
   tapnoted config set --url <url> --secret <secret>   Save connection details
-  tapnoted queue "<message>"                          Queue a message for the next tap
+  tapnoted config show                                Show the saved config (secret partially masked)
+  tapnoted queue ["<message>"]                        Queue a message for the next tap (interactive picker if omitted)
   tapnoted status                                     Show what's currently queued
   tapnoted cancel                                     Clear a queued message
   tapnoted add "<message>"                            Add a message to the random pool
   tapnoted list                                        List all messages in the pool
-  tapnoted delete <index>                              Remove a message by its list index
+  tapnoted delete [<index>]                            Remove a message (interactive picker if index omitted)
   tapnoted reset                                       Clear the entire pool (asks to confirm)`)
 }
