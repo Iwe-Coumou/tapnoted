@@ -49,18 +49,25 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Usage:")
 
-	rows := [][2]string{
+	// Split into groups so one long line (config set, with its flags)
+	// doesn't force every short command to pad out to the same width.
+	printUsageRows([][2]string{
 		{`config set --url <url> --secret <secret>`, "Save connection details"},
-		{`config show`, "Show the saved config (secret partially masked)"},
-		{`queue ["<message>"]`, "Add a message to the queue (interactive picker if omitted)"},
-		{`status`, "List what's currently queued, in order"},
-		{`cancel [<index>]`, "Clear the whole queue (asks to confirm), or remove one item by index"},
-		{`add "<message>"`, "Add a message to the random pool"},
-		{`list`, "List all messages in the pool"},
-		{`delete [<index>]`, "Remove a message (interactive picker if index omitted)"},
-		{`reset`, "Clear the entire pool (asks to confirm)"},
-	}
+		{`config show`, "Show saved config (secret masked)"},
+	})
+	fmt.Println()
+	printUsageRows([][2]string{
+		{`queue ["<message>"]`, "Queue a message"},
+		{`status`, "Show the queue"},
+		{`cancel [<index>]`, "Clear queue, or remove one by index"},
+		{`add "<message>"`, "Add a message to the pool"},
+		{`list`, "List the pool"},
+		{`delete [<index>]`, "Remove a message"},
+		{`reset`, "Clear the pool"},
+	})
+}
 
+func printUsageRows(rows [][2]string) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	for _, row := range rows {
 		fmt.Fprintf(w, "  tapnoted %s\t%s\n", row[0], row[1])
