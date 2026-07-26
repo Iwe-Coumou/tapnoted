@@ -115,7 +115,7 @@ func runQueue(args []string) error {
 
 	var selected int
 	if err := huh.NewSelect[int]().
-		Title("Queue which message for the next tap?").
+		Title("Add which message to the queue?").
 		Options(opts...).
 		Value(&selected).
 		Run(); err != nil {
@@ -133,28 +133,71 @@ func runQueue(args []string) error {
 	return queueMessage(messages[selected])
 }
 
-func runStatus() error {
+func fetchQueue() ([]string, error) {
 	data, err := request(http.MethodGet, "/queue", nil)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Queue []string `json:"queue"`
+	}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result.Queue, nil
+}
+
+func runStatus() error {
+	queue, err := fetchQueue()
 	if err != nil {
 		return err
 	}
 
-	var result struct {
-		Queued *string `json:"queued"`
-	}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return err
+	if len(queue) == 0 {
+		fmt.Println(dimStyle.Render("Nothing queued — next tap will be random."))
+		return nil
 	}
 
-	if result.Queued == nil {
-		fmt.Println(dimStyle.Render("Nothing queued — next tap will be random."))
-	} else {
-		fmt.Println(headerStyle.Render("Queued:") + " " + *result.Queued)
+	fmt.Println(headerStyle.Render(fmt.Sprintf("Queue (%d)", len(queue))))
+	for i, m := range queue {
+		fmt.Printf("%s  %s\n", dimStyle.Render(fmt.Sprintf("%2d", i)), m)
 	}
 	return nil
 }
 
-func runCancel() error {
+func cancelByIndex(index int) error {
+	if _, err := request(http.MethodDelete, "/queue", map[string]int{"index": index}); err != nil {
+		return err
+	}
+	printSuccess("Removed.")
+	return nil
+}
+
+// runCancel removes queued messages. With an index argument, it removes
+// just that one entry directly. With no argument, it clears the whole
+// queue, after confirming — a queue can now hold several messages, so
+// wiping it all is more consequential than it used to be.
+func runCancel(args []string) error {
+	if len(args) > 0 {
+		index, err := strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("index must be a number: %w", err)
+		}
+		return cancelByIndex(index)
+	}
+
+	var confirm bool
+	if err := huh.NewConfirm().
+		Title("This will clear the entire queue. Continue?").
+		Value(&confirm).
+		Run(); err != nil {
+		return err
+	}
+	if !confirm {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
 	if _, err := request(http.MethodDelete, "/queue", nil); err != nil {
 		return err
 	}

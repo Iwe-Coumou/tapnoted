@@ -47,9 +47,9 @@ tapnoted config show
 | --------------------------------- | ------------------------------------------------------------------------ |
 | `config set --url <url> --secret <secret>` | Save connection details                                     |
 | `config show`                     | Show the saved config (secret masked)                                   |
-| `queue ["<message>"]`             | Queue a message for the next tap. No argument opens an interactive picker (existing pool message, or type a new one). |
-| `status`                          | Show what's currently queued, if anything                               |
-| `cancel`                          | Clear a queued message, reverting to random                             |
+| `queue ["<message>"]`             | Add a message to the queue. No argument opens an interactive picker (existing pool message, or type a new one). Taps serve queued messages in order before falling back to random. |
+| `status`                          | List what's currently queued, in order                                  |
+| `cancel [<index>]`                | Clear the whole queue (asks to confirm), or remove just one item by index |
 | `add "<message>"`                 | Add a message to the random pool                                        |
 | `list`                            | List all messages in the pool                                           |
 | `delete [<index>]`                | Remove a message from the pool. No argument opens an interactive picker with a confirmation step. |

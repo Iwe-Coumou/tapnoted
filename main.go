@@ -23,7 +23,7 @@ func main() {
 	case "status":
 		err = runStatus()
 	case "cancel":
-		err = runCancel()
+		err = runCancel(args)
 	case "add":
 		err = runAdd(args)
 	case "list":
@@ -49,9 +49,9 @@ func printUsage() {
 Usage:
   tapnoted config set --url <url> --secret <secret>   Save connection details
   tapnoted config show                                Show the saved config (secret partially masked)
-  tapnoted queue ["<message>"]                        Queue a message for the next tap (interactive picker if omitted)
-  tapnoted status                                     Show what's currently queued
-  tapnoted cancel                                     Clear a queued message
+  tapnoted queue ["<message>"]                        Add a message to the queue (interactive picker if omitted)
+  tapnoted status                                     List what's currently queued, in order
+  tapnoted cancel [<index>]                            Clear the whole queue (asks to confirm), or remove one item by index
   tapnoted add "<message>"                            Add a message to the random pool
   tapnoted list                                        List all messages in the pool
   tapnoted delete [<index>]                            Remove a message (interactive picker if index omitted)
