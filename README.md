@@ -54,3 +54,13 @@ tapnoted config show
 | `list`                            | List all messages in the pool                                           |
 | `delete [<index>]`                | Remove a message from the pool. No argument opens an interactive picker with a confirmation step. |
 | `reset`                           | Clear the entire pool (asks to confirm)                                 |
+
+## A note on how this was built
+
+The idea and design behind this project are mine — a companion CLI to
+manage [tapnote](https://github.com/Iwe-Coumou/tapnote) from the terminal,
+built as an extension of that same learning project. I directed the scope
+and design decisions (what it needed to do, how secrets should be handled,
+how it should feel to use) and reviewed and tested every piece with AI
+assistance (Claude) as it was built. AI acted as a pair programmer here, not
+an autopilot.
