@@ -33,6 +33,8 @@ func main() {
 		err = runDelete(args)
 	case "reset":
 		err = runReset()
+	case "replies":
+		err = runReplies(args)
 	default:
 		printUsage()
 		os.Exit(1)
@@ -64,6 +66,8 @@ func printUsage() {
 		{`list`, "List the pool"},
 		{`delete [<index>]`, "Remove a message"},
 		{`reset`, "Clear the pool"},
+		{`replies [list]`, "Show her replies"},
+		{`replies clear [<index>]`, "Clear replies, or remove one by index"},
 	})
 }
 

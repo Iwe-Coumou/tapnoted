@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/charmbracelet/huh"
 )
@@ -290,6 +291,105 @@ func runDelete(args []string) error {
 	}
 
 	return deleteByIndex(selected)
+}
+
+type reply struct {
+	Text      string `json:"text"`
+	RepliedTo string `json:"repliedTo"`
+	Timestamp string `json:"timestamp"`
+}
+
+func fetchReplies() ([]reply, error) {
+	data, err := request(http.MethodGet, "/replies", nil)
+	if err != nil {
+		return nil, err
+	}
+	var replies []reply
+	if err := json.Unmarshal(data, &replies); err != nil {
+		return nil, err
+	}
+	return replies, nil
+}
+
+func formatTimestamp(ts string) string {
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return ts
+	}
+	return t.Local().Format("Jan 2 15:04")
+}
+
+// runReplies shows what she's sent back. `tapnoted replies` (or `replies
+// list`) lists everything: the message she was replying to, her reply, and
+// when. `replies clear [<index>]` clears one entry or, with no index,
+// everything (after confirming).
+func runReplies(args []string) error {
+	if len(args) == 0 {
+		return listReplies()
+	}
+
+	switch args[0] {
+	case "list":
+		return listReplies()
+	case "clear":
+		return clearReplies(args[1:])
+	default:
+		return errors.New("usage: tapnoted replies [list|clear [<index>]]")
+	}
+}
+
+func listReplies() error {
+	replies, err := fetchReplies()
+	if err != nil {
+		return err
+	}
+
+	if len(replies) == 0 {
+		fmt.Println(dimStyle.Render("No replies yet."))
+		return nil
+	}
+
+	fmt.Println(headerStyle.Render(fmt.Sprintf("Replies (%d)", len(replies))))
+	for i, r := range replies {
+		fmt.Printf("%s  %s\n", dimStyle.Render(fmt.Sprintf("%2d", i)), formatTimestamp(r.Timestamp))
+		if r.RepliedTo != "" {
+			fmt.Println(dimStyle.Render("     re: ") + r.RepliedTo)
+		}
+		fmt.Println("     " + r.Text)
+	}
+	return nil
+}
+
+func clearReplies(args []string) error {
+	if len(args) > 0 {
+		index, err := strconv.Atoi(args[0])
+		if err != nil {
+			return fmt.Errorf("index must be a number: %w", err)
+		}
+		if _, err := request(http.MethodDelete, "/replies", map[string]int{"index": index}); err != nil {
+			return err
+		}
+		printSuccess("Removed.")
+		return nil
+	}
+
+	var confirm bool
+	if err := huh.NewConfirm().
+		Title("This will clear all replies. Continue?").
+		Value(&confirm).
+		Run(); err != nil {
+		return err
+	}
+	if !confirm {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
+	if _, err := request(http.MethodDelete, "/replies", nil); err != nil {
+		return err
+	}
+	printSuccess("Cleared.")
+	return nil
 }
 
 func runReset() error {

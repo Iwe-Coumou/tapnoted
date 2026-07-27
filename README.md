@@ -54,6 +54,8 @@ tapnoted config show
 | `list`                            | List all messages in the pool                                           |
 | `delete [<index>]`                | Remove a message from the pool. No argument opens an interactive picker with a confirmation step. |
 | `reset`                           | Clear the entire pool (asks to confirm)                                 |
+| `replies [list]`                  | Show her replies: the message she was replying to, her reply, and when  |
+| `replies clear [<index>]`         | Clear all replies (asks to confirm), or remove just one by index        |
 
 ## A note on how this was built
 
