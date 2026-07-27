@@ -19,20 +19,12 @@ func main() {
 	switch cmd {
 	case "config":
 		err = runConfig(args)
+	case "messages":
+		err = runMessages(args)
 	case "queue":
 		err = runQueue(args)
-	case "status":
-		err = runStatus()
-	case "cancel":
-		err = runCancel(args)
-	case "add":
-		err = runAdd(args)
-	case "list":
-		err = runList()
-	case "delete":
-		err = runDelete(args)
-	case "reset":
-		err = runReset()
+	case "songs":
+		err = runSongs(args)
 	case "replies":
 		err = runReplies(args)
 	default:
@@ -59,16 +51,14 @@ func printUsage() {
 	})
 	fmt.Println()
 	printUsageRows([][2]string{
-		{`queue ["<message>"]`, "Queue a message"},
-		{`status`, "Show the queue"},
-		{`cancel [<index>]`, "Clear queue, or remove one by index"},
-		{`add "<message>"`, "Add a message to the pool"},
-		{`list`, "List the pool"},
-		{`delete [<index>]`, "Remove a message"},
-		{`reset`, "Clear the pool"},
-		{`replies [list]`, "Show her replies"},
-		{`replies clear [<index>]`, "Clear replies, or remove one by index"},
+		{`messages [add|list|delete|reset]`, "Manage the message pool"},
+		{`queue [add|status|cancel]`, "Manage the queue"},
+		{`songs [add|list|delete|reset]`, "Manage songs"},
+		{`replies [list|clear]`, "View or clear her replies"},
 	})
+	fmt.Println()
+	fmt.Println("Run any of those with no subcommand for an interactive menu, e.g. `tapnoted songs`.")
+	fmt.Println("Or give the subcommand directly for a fast path, e.g. `tapnoted songs add <url> \"title\"`.")
 }
 
 func printUsageRows(rows [][2]string) {

@@ -43,19 +43,18 @@ tapnoted config show
 
 ## Commands
 
-| Command                          | Purpose                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| `config set --url <url> --secret <secret>` | Save connection details                                     |
-| `config show`                     | Show the saved config (secret masked)                                   |
-| `queue ["<message>"]`             | Add a message to the queue. No argument opens an interactive picker (existing pool message, or type a new one). Taps serve queued messages in order before falling back to random. |
-| `status`                          | List what's currently queued, in order                                  |
-| `cancel [<index>]`                | Clear the whole queue (asks to confirm), or remove just one item by index |
-| `add "<message>"`                 | Add a message to the random pool                                        |
-| `list`                            | List all messages in the pool                                           |
-| `delete [<index>]`                | Remove a message from the pool. No argument opens an interactive picker with a confirmation step. |
-| `reset`                           | Clear the entire pool (asks to confirm)                                 |
-| `replies [list]`                  | Show her replies: the message she was replying to, her reply, and when  |
-| `replies clear [<index>]`         | Clear all replies (asks to confirm), or remove just one by index        |
+Each resource below (`messages`, `queue`, `songs`, `replies`) works two ways:
+run it bare for an interactive arrow-key menu (`tapnoted songs`), or give the
+subcommand directly for a fast, scriptable path (`tapnoted songs add <url>`).
+
+| Command                                    | Purpose                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| `config set --url <url> --secret <secret>` | Save connection details                                                 |
+| `config show`                              | Show the saved config (secret masked)                                   |
+| `messages` / `messages add "<msg>"`        | Manage the random-pick pool — add, `list`, `delete [<index>]`, `reset`  |
+| `queue` / `queue add ["<msg>"]`            | Manage the queue — add (interactive picker if no text given), `status`, `cancel [<index>]` |
+| `songs` / `songs add <url> ["title"]`      | Manage the curated song pool — add, `list`, `delete [<index>]`, `reset` |
+| `replies` / `replies list`                 | Show her replies (message she replied to, her reply, and when), or `clear [<index>]` |
 
 ## A note on how this was built
 
