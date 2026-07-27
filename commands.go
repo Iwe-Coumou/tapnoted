@@ -10,20 +10,59 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/huh"
 )
 
-// pickAction shows a single arrow-key menu for choosing what to do with a
-// resource (messages/queue/songs/replies) when the command is run with no
-// subcommand at all — the shared building block behind that behavior.
-func pickAction(title string, opts ...huh.Option[string]) (string, error) {
-	var action string
-	err := huh.NewSelect[string]().
-		Title(title).
-		Options(opts...).
-		Value(&action).
-		Run()
-	return action, err
+// errBack is returned by a leaf action (add/delete/reset/...) when the user
+// pressed Esc partway through it. It's not a real error — callers use it to
+// decide whether to return to the enclosing menu instead of exiting.
+var errBack = errors.New("back")
+
+// escKeyMap adds Esc to huh's default "quit this form" binding (which is
+// otherwise Ctrl+C only), so Esc can be used to back out of a prompt.
+func escKeyMap() *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"))
+	return km
+}
+
+// selectFrom shows a single-field select menu. ok is false (err nil) if the
+// user backed out with Esc/Ctrl+C, distinct from a real error.
+func selectFrom[T comparable](title string, opts ...huh.Option[T]) (value T, ok bool, err error) {
+	field := huh.NewSelect[T]().Title(title).Options(opts...).Value(&value)
+	runErr := huh.NewForm(huh.NewGroup(field)).WithShowHelp(false).WithKeyMap(escKeyMap()).Run()
+	if errors.Is(runErr, huh.ErrUserAborted) {
+		return value, false, nil
+	}
+	if runErr != nil {
+		return value, false, runErr
+	}
+	return value, true, nil
+}
+
+func confirmPrompt(title string) (value bool, ok bool, err error) {
+	field := huh.NewConfirm().Title(title).Value(&value)
+	runErr := huh.NewForm(huh.NewGroup(field)).WithShowHelp(false).WithKeyMap(escKeyMap()).Run()
+	if errors.Is(runErr, huh.ErrUserAborted) {
+		return false, false, nil
+	}
+	if runErr != nil {
+		return false, false, runErr
+	}
+	return value, true, nil
+}
+
+func inputPrompt(title string) (value string, ok bool, err error) {
+	field := huh.NewInput().Title(title).Value(&value)
+	runErr := huh.NewForm(huh.NewGroup(field)).WithShowHelp(false).WithKeyMap(escKeyMap()).Run()
+	if errors.Is(runErr, huh.ErrUserAborted) {
+		return "", false, nil
+	}
+	if runErr != nil {
+		return "", false, runErr
+	}
+	return value, true, nil
 }
 
 func runConfig(args []string) error {
@@ -102,47 +141,66 @@ func fetchMessages() ([]string, error) {
 	return messages, nil
 }
 
-// runMessages manages the random-pick pool. With a subcommand
-// (add/list/delete/reset) it acts directly — handy for scripting. With no
-// subcommand it opens a menu, which is really just another way of reaching
-// the same functions below.
+// runMessages manages the random-pick pool. With a subcommand it acts
+// directly. With none, it shows a menu; Esc on the menu exits, Esc inside
+// whichever action was chosen returns to this same menu.
 func runMessages(args []string) error {
 	if len(args) > 0 {
+		var err error
 		switch args[0] {
 		case "add":
-			return messageAdd(args[1:])
+			err = messageAdd(args[1:])
 		case "list":
-			return messageList()
+			err = messageList()
 		case "delete":
-			return messageDelete(args[1:])
+			err = messageDelete(args[1:])
 		case "reset":
-			return messageReset()
+			err = messageReset()
 		default:
 			return errors.New("usage: tapnoted messages <add|list|delete|reset> ...")
 		}
+		return backOrErr(err)
 	}
 
-	action, err := pickAction("Messages",
-		huh.NewOption("Add a message", "add"),
-		huh.NewOption("List the pool", "list"),
-		huh.NewOption("Delete a message", "delete"),
-		huh.NewOption("Reset the pool", "reset"),
-	)
-	if err != nil {
+	for {
+		action, ok, err := selectFrom("Messages",
+			huh.NewOption("Add a message", "add"),
+			huh.NewOption("List the pool", "list"),
+			huh.NewOption("Delete a message", "delete"),
+			huh.NewOption("Reset the pool", "reset"),
+		)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+
+		switch action {
+		case "add":
+			err = messageAdd(nil)
+		case "list":
+			return messageList()
+		case "delete":
+			err = messageDelete(nil)
+		case "reset":
+			err = messageReset()
+		}
+		if errors.Is(err, errBack) {
+			continue
+		}
 		return err
 	}
+}
 
-	switch action {
-	case "add":
-		return messageAdd(nil)
-	case "list":
-		return messageList()
-	case "delete":
-		return messageDelete(nil)
-	case "reset":
-		return messageReset()
+// backOrErr turns errBack into a clean "Cancelled." (no scary error text)
+// for the direct-subcommand entry point, where there's no menu to return to.
+func backOrErr(err error) error {
+	if errors.Is(err, errBack) {
+		fmt.Println("Cancelled.")
+		return nil
 	}
-	return nil
+	return err
 }
 
 // messageAdd adds a message. With text given, it adds directly. With none,
@@ -153,9 +211,14 @@ func messageAdd(args []string) error {
 	if len(args) > 0 {
 		text = args[0]
 	} else {
-		if err := huh.NewInput().Title("New message").Value(&text).Run(); err != nil {
+		value, ok, err := inputPrompt("New message")
+		if err != nil {
 			return err
 		}
+		if !ok {
+			return errBack
+		}
+		text = value
 	}
 
 	text = strings.TrimSpace(text)
@@ -222,41 +285,32 @@ func messageDelete(args []string) error {
 		opts[i] = huh.NewOption(fmt.Sprintf("%d: %s", i, m), i)
 	}
 
-	var selected int
-	if err := huh.NewSelect[int]().
-		Title("Pick a message to delete").
-		Options(opts...).
-		Value(&selected).
-		Run(); err != nil {
+	selected, ok, err := selectFrom("Pick a message to delete", opts...)
+	if err != nil {
 		return err
+	}
+	if !ok {
+		return errBack
 	}
 
-	var confirm bool
-	if err := huh.NewConfirm().
-		Title(fmt.Sprintf("Delete %q?", messages[selected])).
-		Value(&confirm).
-		Run(); err != nil {
+	confirm, ok, err := confirmPrompt(fmt.Sprintf("Delete %q?", messages[selected]))
+	if err != nil {
 		return err
 	}
-	if !confirm {
-		fmt.Println("Cancelled.")
-		return nil
+	if !ok || !confirm {
+		return errBack
 	}
 
 	return messageDeleteByIndex(selected)
 }
 
 func messageReset() error {
-	var confirm bool
-	if err := huh.NewConfirm().
-		Title("This will permanently clear the entire message pool. Continue?").
-		Value(&confirm).
-		Run(); err != nil {
+	confirm, ok, err := confirmPrompt("This will permanently clear the entire message pool. Continue?")
+	if err != nil {
 		return err
 	}
-	if !confirm {
-		fmt.Println("Cancelled.")
-		return nil
+	if !ok || !confirm {
+		return errBack
 	}
 
 	if _, err := request(http.MethodPut, "/messages", map[string][]string{"messages": {}}); err != nil {
@@ -282,40 +336,50 @@ func fetchQueue() ([]string, error) {
 	return result.Queue, nil
 }
 
-// runQueue manages the queue. With a subcommand (add/status/cancel) it acts
-// directly. With none, it opens a menu.
+// runQueue manages the queue. With a subcommand it acts directly. With
+// none, it shows a menu (same Esc behavior as runMessages).
 func runQueue(args []string) error {
 	if len(args) > 0 {
+		var err error
 		switch args[0] {
 		case "add":
-			return queueAdd(args[1:])
+			err = queueAdd(args[1:])
 		case "status":
-			return queueStatus()
+			err = queueStatus()
 		case "cancel":
-			return queueCancel(args[1:])
+			err = queueCancel(args[1:])
 		default:
 			return errors.New("usage: tapnoted queue <add|status|cancel> ...")
 		}
+		return backOrErr(err)
 	}
 
-	action, err := pickAction("Queue",
-		huh.NewOption("Add to the queue", "add"),
-		huh.NewOption("Show the queue", "status"),
-		huh.NewOption("Clear the queue", "cancel"),
-	)
-	if err != nil {
+	for {
+		action, ok, err := selectFrom("Queue",
+			huh.NewOption("Add to the queue", "add"),
+			huh.NewOption("Show the queue", "status"),
+			huh.NewOption("Clear the queue", "cancel"),
+		)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+
+		switch action {
+		case "add":
+			err = queueAdd(nil)
+		case "status":
+			return queueStatus()
+		case "cancel":
+			err = queueCancel(nil)
+		}
+		if errors.Is(err, errBack) {
+			continue
+		}
 		return err
 	}
-
-	switch action {
-	case "add":
-		return queueAdd(nil)
-	case "status":
-		return queueStatus()
-	case "cancel":
-		return queueCancel(nil)
-	}
-	return nil
 }
 
 func queueAddMessage(message string) error {
@@ -346,19 +410,21 @@ func queueAdd(args []string) error {
 		opts = append(opts, huh.NewOption(fmt.Sprintf("%d: %s", i, m), i))
 	}
 
-	var selected int
-	if err := huh.NewSelect[int]().
-		Title("Add which message to the queue?").
-		Options(opts...).
-		Value(&selected).
-		Run(); err != nil {
+	selected, ok, err := selectFrom("Add which message to the queue?", opts...)
+	if err != nil {
 		return err
+	}
+	if !ok {
+		return errBack
 	}
 
 	if selected == newEntry {
-		var text string
-		if err := huh.NewInput().Title("New message").Value(&text).Run(); err != nil {
+		text, ok, err := inputPrompt("New message")
+		if err != nil {
 			return err
+		}
+		if !ok {
+			return errBack
 		}
 		return queueAddMessage(text)
 	}
@@ -405,16 +471,12 @@ func queueCancel(args []string) error {
 		return queueCancelByIndex(index)
 	}
 
-	var confirm bool
-	if err := huh.NewConfirm().
-		Title("This will clear the entire queue. Continue?").
-		Value(&confirm).
-		Run(); err != nil {
+	confirm, ok, err := confirmPrompt("This will clear the entire queue. Continue?")
+	if err != nil {
 		return err
 	}
-	if !confirm {
-		fmt.Println("Cancelled.")
-		return nil
+	if !ok || !confirm {
+		return errBack
 	}
 
 	if _, err := request(http.MethodDelete, "/queue", nil); err != nil {
@@ -452,35 +514,45 @@ func formatTimestamp(ts string) string {
 	return t.Local().Format("Jan 2 15:04")
 }
 
-// runReplies shows what she's sent back, or clears it. With a subcommand
-// (list/clear) it acts directly. With none, it opens a menu.
+// runReplies shows what she's sent back, or clears it. With a subcommand it
+// acts directly. With none, it shows a menu.
 func runReplies(args []string) error {
 	if len(args) > 0 {
+		var err error
 		switch args[0] {
 		case "list":
-			return repliesList()
+			err = repliesList()
 		case "clear":
-			return repliesClear(args[1:])
+			err = repliesClear(args[1:])
 		default:
 			return errors.New("usage: tapnoted replies <list|clear [<index>]> ...")
 		}
+		return backOrErr(err)
 	}
 
-	action, err := pickAction("Replies",
-		huh.NewOption("Show replies", "list"),
-		huh.NewOption("Clear replies", "clear"),
-	)
-	if err != nil {
+	for {
+		action, ok, err := selectFrom("Replies",
+			huh.NewOption("Show replies", "list"),
+			huh.NewOption("Clear replies", "clear"),
+		)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+
+		switch action {
+		case "list":
+			return repliesList()
+		case "clear":
+			err = repliesClear(nil)
+		}
+		if errors.Is(err, errBack) {
+			continue
+		}
 		return err
 	}
-
-	switch action {
-	case "list":
-		return repliesList()
-	case "clear":
-		return repliesClear(nil)
-	}
-	return nil
 }
 
 func repliesList() error {
@@ -518,16 +590,12 @@ func repliesClear(args []string) error {
 		return nil
 	}
 
-	var confirm bool
-	if err := huh.NewConfirm().
-		Title("This will clear all replies. Continue?").
-		Value(&confirm).
-		Run(); err != nil {
+	confirm, ok, err := confirmPrompt("This will clear all replies. Continue?")
+	if err != nil {
 		return err
 	}
-	if !confirm {
-		fmt.Println("Cancelled.")
-		return nil
+	if !ok || !confirm {
+		return errBack
 	}
 
 	if _, err := request(http.MethodDelete, "/replies", nil); err != nil {
@@ -564,45 +632,55 @@ func fetchSongs() ([]song, error) {
 }
 
 // runSongs manages the curated song pool (plain Spotify track links, not a
-// live playlist lookup). With a subcommand (add/list/delete/reset) it acts
-// directly. With none, it opens a menu.
+// live playlist lookup). With a subcommand it acts directly. With none, it
+// shows a menu.
 func runSongs(args []string) error {
 	if len(args) > 0 {
+		var err error
 		switch args[0] {
 		case "add":
-			return songAdd(args[1:])
+			err = songAdd(args[1:])
 		case "list":
-			return songList()
+			err = songList()
 		case "delete":
-			return songDelete(args[1:])
+			err = songDelete(args[1:])
 		case "reset":
-			return songReset()
+			err = songReset()
 		default:
 			return errors.New(`usage: tapnoted songs <add <url> ["title"]|list|delete [<index>]|reset>`)
 		}
+		return backOrErr(err)
 	}
 
-	action, err := pickAction("Songs",
-		huh.NewOption("Add a song", "add"),
-		huh.NewOption("List songs", "list"),
-		huh.NewOption("Delete a song", "delete"),
-		huh.NewOption("Clear all songs", "reset"),
-	)
-	if err != nil {
+	for {
+		action, ok, err := selectFrom("Songs",
+			huh.NewOption("Add a song", "add"),
+			huh.NewOption("List songs", "list"),
+			huh.NewOption("Delete a song", "delete"),
+			huh.NewOption("Clear all songs", "reset"),
+		)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+
+		switch action {
+		case "add":
+			err = songAdd(nil)
+		case "list":
+			return songList()
+		case "delete":
+			err = songDelete(nil)
+		case "reset":
+			err = songReset()
+		}
+		if errors.Is(err, errBack) {
+			continue
+		}
 		return err
 	}
-
-	switch action {
-	case "add":
-		return songAdd(nil)
-	case "list":
-		return songList()
-	case "delete":
-		return songDelete(nil)
-	case "reset":
-		return songReset()
-	}
-	return nil
 }
 
 // songAdd adds a song. With a URL (and optional title) given, it adds
@@ -610,13 +688,22 @@ func runSongs(args []string) error {
 // interactive menu above via songAdd(nil).
 func songAdd(args []string) error {
 	if len(args) == 0 {
-		var urlInput, title string
-		if err := huh.NewInput().Title("Spotify track URL").Value(&urlInput).Run(); err != nil {
+		urlInput, ok, err := inputPrompt("Spotify track URL")
+		if err != nil {
 			return err
 		}
-		if err := huh.NewInput().Title("Title (optional)").Value(&title).Run(); err != nil {
+		if !ok {
+			return errBack
+		}
+
+		title, ok, err := inputPrompt("Title (optional)")
+		if err != nil {
 			return err
 		}
+		if !ok {
+			return errBack
+		}
+
 		args = []string{urlInput}
 		if title != "" {
 			args = append(args, title)
@@ -688,41 +775,32 @@ func songDelete(args []string) error {
 		opts[i] = huh.NewOption(fmt.Sprintf("%d: %s", i, s.label()), i)
 	}
 
-	var selected int
-	if err := huh.NewSelect[int]().
-		Title("Pick a song to delete").
-		Options(opts...).
-		Value(&selected).
-		Run(); err != nil {
+	selected, ok, err := selectFrom("Pick a song to delete", opts...)
+	if err != nil {
 		return err
+	}
+	if !ok {
+		return errBack
 	}
 
-	var confirm bool
-	if err := huh.NewConfirm().
-		Title(fmt.Sprintf("Delete %q?", songs[selected].label())).
-		Value(&confirm).
-		Run(); err != nil {
+	confirm, ok, err := confirmPrompt(fmt.Sprintf("Delete %q?", songs[selected].label()))
+	if err != nil {
 		return err
 	}
-	if !confirm {
-		fmt.Println("Cancelled.")
-		return nil
+	if !ok || !confirm {
+		return errBack
 	}
 
 	return songDeleteByIndex(selected)
 }
 
 func songReset() error {
-	var confirm bool
-	if err := huh.NewConfirm().
-		Title("This will permanently clear all songs. Continue?").
-		Value(&confirm).
-		Run(); err != nil {
+	confirm, ok, err := confirmPrompt("This will permanently clear all songs. Continue?")
+	if err != nil {
 		return err
 	}
-	if !confirm {
-		fmt.Println("Cancelled.")
-		return nil
+	if !ok || !confirm {
+		return errBack
 	}
 
 	if _, err := request(http.MethodPut, "/songs", map[string][]song{"songs": {}}); err != nil {

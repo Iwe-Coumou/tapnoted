@@ -46,6 +46,9 @@ tapnoted config show
 Each resource below (`messages`, `queue`, `songs`, `replies`) works two ways:
 run it bare for an interactive arrow-key menu (`tapnoted songs`), or give the
 subcommand directly for a fast, scriptable path (`tapnoted songs add <url>`).
+In any menu, **Esc** backs out one level (e.g. out of a delete confirmation
+back to the main menu) instead of exiting the whole command; **Ctrl+C** still
+quits immediately from anywhere.
 
 | Command                                    | Purpose                                                                 |
 | ------------------------------------------- | ------------------------------------------------------------------------ |
