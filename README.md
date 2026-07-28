@@ -1,12 +1,20 @@
 # tapnoted
 
+[![Latest release](https://img.shields.io/github/v/release/Iwe-Coumou/tapnoted)](https://github.com/Iwe-Coumou/tapnoted/releases/latest)
+
 A command-line tool for managing the messages behind
 [tapnote](https://github.com/Iwe-Coumou/tapnote), an NFC tap-to-reveal
 message gift. It talks to the deployed tapnote Cloudflare Worker over its
 admin API — queue a specific message for the next tap, manage the random
 message pool, all from the terminal.
 
-## Prerequisites
+## Download
+
+Prebuilt binaries for Windows, macOS, and Linux are attached to each
+[release](https://github.com/Iwe-Coumou/tapnoted/releases/latest) — no Go
+installation needed. Download the one for your platform and run it directly.
+
+## Prerequisites (building from source)
 
 - [Go](https://go.dev) (1.21+)
 - A deployed tapnote Worker and its `ADMIN_SECRET` (see the
