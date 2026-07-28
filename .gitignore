@@ -1,2 +1,5 @@
 tapnoted
 tapnoted.exe
+
+*.exe
+/dist/

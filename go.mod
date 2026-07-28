@@ -1,4 +1,4 @@
-module tapnoted
+module github.com/Iwe-Coumou/tapnoted
 
 go 1.25.0
 
