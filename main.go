@@ -27,6 +27,8 @@ func main() {
 		err = runSongs(args)
 	case "replies":
 		err = runReplies(args)
+	case "overview":
+		err = runOverview()
 	default:
 		printUsage()
 		os.Exit(1)
@@ -51,13 +53,14 @@ func printUsage() {
 	})
 	fmt.Println()
 	printUsageRows([][2]string{
+		{`overview`, "Quick summary: queue, pool, songs, waiting replies"},
 		{`messages [add|list|delete|reset]`, "Manage the message pool"},
 		{`queue [add|status|cancel]`, "Manage the queue"},
 		{`songs [add|list|delete|reset]`, "Manage songs"},
-		{`replies [list|clear]`, "View or clear her replies"},
+		{`replies`, "View her replies (viewing clears them — view-once)"},
 	})
 	fmt.Println()
-	fmt.Println("Run any of those with no subcommand for an interactive menu, e.g. `tapnoted songs`.")
+	fmt.Println("Run messages/queue/songs with no subcommand for an interactive menu, e.g. `tapnoted songs`.")
 	fmt.Println("Or give the subcommand directly for a fast path, e.g. `tapnoted songs add <url> \"title\"`.")
 }
 

@@ -12,6 +12,10 @@ var (
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
 	dimStyle     = lipgloss.NewStyle().Faint(true)
 	headerStyle  = lipgloss.NewStyle().Bold(true)
+	// noticeStyle is for "something worth your attention" (e.g. new replies
+	// waiting) — distinct from successStyle, which means "an action you took
+	// just completed."
+	noticeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
 )
 
 func printSuccess(msg string) {

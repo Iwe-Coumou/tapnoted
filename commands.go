@@ -514,48 +514,11 @@ func formatTimestamp(ts string) string {
 	return t.Local().Format("Jan 2 15:04")
 }
 
-// runReplies shows what she's sent back, or clears it. With a subcommand it
-// acts directly. With none, it shows a menu.
+// runReplies shows what she's sent back. There's nothing to choose — viewing
+// them is the only action, and it clears them as a side effect (view-once,
+// same idea as GET /message destructively popping the queue) — so no menu,
+// no subcommands, just show them.
 func runReplies(args []string) error {
-	if len(args) > 0 {
-		var err error
-		switch args[0] {
-		case "list":
-			err = repliesList()
-		case "clear":
-			err = repliesClear(args[1:])
-		default:
-			return errors.New("usage: tapnoted replies <list|clear [<index>]> ...")
-		}
-		return backOrErr(err)
-	}
-
-	for {
-		action, ok, err := selectFrom("Replies",
-			huh.NewOption("Show replies", "list"),
-			huh.NewOption("Clear replies", "clear"),
-		)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-
-		switch action {
-		case "list":
-			return repliesList()
-		case "clear":
-			err = repliesClear(nil)
-		}
-		if errors.Is(err, errBack) {
-			continue
-		}
-		return err
-	}
-}
-
-func repliesList() error {
 	replies, err := fetchReplies()
 	if err != nil {
 		return err
@@ -577,32 +540,21 @@ func repliesList() error {
 	return nil
 }
 
-func repliesClear(args []string) error {
-	if len(args) > 0 {
-		index, err := strconv.Atoi(args[0])
-		if err != nil {
-			return fmt.Errorf("index must be a number: %w", err)
-		}
-		if _, err := request(http.MethodDelete, "/replies", map[string]int{"index": index}); err != nil {
-			return err
-		}
-		printSuccess("Removed.")
-		return nil
-	}
-
-	confirm, ok, err := confirmPrompt("This will clear all replies. Continue?")
+// fetchReplyCount is a safe, non-destructive peek at how many replies are
+// waiting — used by `overview`, which must not accidentally consume them
+// just by checking in.
+func fetchReplyCount() (int, error) {
+	data, err := request(http.MethodGet, "/replies/count", nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	if !ok || !confirm {
-		return errBack
+	var result struct {
+		Count int `json:"count"`
 	}
-
-	if _, err := request(http.MethodDelete, "/replies", nil); err != nil {
-		return err
+	if err := json.Unmarshal(data, &result); err != nil {
+		return 0, err
 	}
-	printSuccess("Cleared.")
-	return nil
+	return result.Count, nil
 }
 
 // --- songs --------------------------------------------------------------
@@ -807,5 +759,40 @@ func songReset() error {
 		return err
 	}
 	printSuccess("Songs cleared.")
+	return nil
+}
+
+// --- overview -------------------------------------------------------------
+
+// runOverview prints a quick, at-a-glance summary across every resource.
+// The reply count is fetched via the non-destructive /replies/count
+// endpoint — checking in here must never silently consume pending replies.
+func runOverview() error {
+	queue, err := fetchQueue()
+	if err != nil {
+		return err
+	}
+	messages, err := fetchMessages()
+	if err != nil {
+		return err
+	}
+	songs, err := fetchSongs()
+	if err != nil {
+		return err
+	}
+	replyCount, err := fetchReplyCount()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(headerStyle.Render("Overview"))
+	fmt.Printf("  Queue:    %d waiting\n", len(queue))
+	fmt.Printf("  Pool:     %d messages\n", len(messages))
+	fmt.Printf("  Songs:    %d\n", len(songs))
+	if replyCount == 0 {
+		fmt.Println(dimStyle.Render("  Replies:  none waiting"))
+	} else {
+		fmt.Println(noticeStyle.Render(fmt.Sprintf("  Replies:  %d new — run `tapnoted replies` to view", replyCount)))
+	}
 	return nil
 }
